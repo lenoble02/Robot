@@ -1,11 +1,11 @@
 
 const express = require('express');
 const path = require('path');
-const WebSocket = require('ws');
+const ioClient = require('socket.io-client');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Récupération sécurisée du jeton API depuis les variables d'environnement Render
+// Récupération sécurisée du jeton ou identifiant de session depuis Render
 const BROKER_API_TOKEN = process.env.BROKER_API_TOKEN || '';
 
 // Middleware pour lire les données JSON et les formulaires
@@ -15,55 +15,45 @@ app.use(express.urlencoded({ extended: true }));
 // Rendre le dossier courant accessible publiquement (pour vos fichiers HTML, app.js, images, sw.js)
 app.use(express.static(path.join(__dirname)));
 
-// --- CONFIGURATION WEBSOCKET COURTIER ---
-// L'URL est optionnelle tant qu'aucun jeton n'est configuré (mode simulation propre)
-const BROKER_WS_URL = 'wss://ws.derivws.com/websockets/v3?app_id=1089'; 
-let brokerWs = null;
+// --- CONFIGURATION WEBSOCKET POCKET OPTION ---
+let brokerSocket = null;
 let isBrokerConnected = false;
 
-function connectToBroker() {
-    // Si aucun token n'est configuré ou si l'URL est vide, on reste en mode simulation pure sans lancer de WebSocket
-    if (!BROKER_API_TOKEN || !BROKER_WS_URL) {
-        console.log('[BROKER] Aucun jeton API ou URL détecté. Fonctionnement en mode simulation propre.');
+function connectToPocketOption() {
+    // Si aucun jeton de session n'est configuré, on reste en mode simulation propre
+    if (!BROKER_API_TOKEN) {
+        console.log('[POCKET OPTION] Aucun jeton de session détecté. Fonctionnement en mode simulation propre.');
         return;
     }
 
-    console.log('[BROKER] Connexion en cours vers le serveur du courtier avec le jeton sécurisé...');
-    brokerWs = new WebSocket(BROKER_WS_URL);
-
-    brokerWs.on('open', () => {
-        isBrokerConnected = true;
-        console.log('[BROKER] Connecté avec succès au courtier en temps réel !');
-        
-        // Envoi de l'authentification avec le jeton sécurisé de Render
-        const authMessage = {
-            authorize: BROKER_API_TOKEN
-        };
-        brokerWs.send(JSON.stringify(authMessage));
-    });
-
-    brokerWs.on('message', (data) => {
-        try {
-            const response = JSON.parse(data);
-            console.log('[BROKER] Données reçues du marché :', response);
-        } catch (e) {
-            console.error('[BROKER] Erreur de parsing JSON :', e);
+    console.log('[POCKET OPTION] Connexion en cours vers le serveur de trading réel...');
+    
+    // Connexion via Socket.IO avec l'identifiant de session sécurisé
+    brokerSocket = ioClient('https://pocketoption.com', {
+        path: '/socket.io/',
+        transports: ['websocket'],
+        query: {
+            session: BROKER_API_TOKEN
         }
     });
 
-    brokerWs.on('close', () => {
-        isBrokerConnected = false;
-        console.log('[BROKER] Déconnecté du courtier. Tentative de reconnexion dans 5 secondes...');
-        setTimeout(connectToBroker, 5000);
+    brokerSocket.on('connect', () => {
+        isBrokerConnected = true;
+        console.log('[POCKET OPTION] Connecté avec succès au compte réel en temps réel !');
     });
 
-    brokerWs.on('error', (error) => {
-        console.error('[BROKER] Erreur WebSocket :', error.message);
+    brokerSocket.on('disconnect', () => {
+        isBrokerConnected = false;
+        console.log('[POCKET OPTION] Déconnecté du courtier. Tentative de reconnexion...');
+    });
+
+    brokerSocket.on('connect_error', (error) => {
+        console.error('[POCKET OPTION] Erreur de connexion WebSocket :', error.message);
     });
 }
 
 // Lancer la tentative de connexion au démarrage
-connectToBroker();
+connectToPocketOption();
 
 
 // --- ROUTES DE VOTRE APPLICATION WEB ---
@@ -90,22 +80,19 @@ app.post('/api/trading/executer', (req, res) => {
 
     console.log(`[BOT TRADING] Compte: ${type_compte || 'DEMO'} | Actif: ${actif}, Montant: ${montant}, Type: ${type_option}`);
 
-    // Si le jeton est présent, que le compte est Réel et que le WebSocket est connecté -> Vrai trade
+    // Si le jeton de session est présent, que le compte est Réel et que le WebSocket est connecté -> Vrai trade
     if (BROKER_API_TOKEN && isBrokerConnected && type_compte === 'REEL') {
-        const realOrder = {
-            buy: 1,
-            price: montant,
-            parameters: {
-                amount: montant,
-                basis: 'stake',
-                symbol: actif,
-                duration: 1,
-                duration_unit: 'm',
-                contract_type: type_option.toUpperCase().includes('HAUSSE') ? 'CALL' : 'PUT'
-            }
+        const pocketOrder = {
+            action: 'open_order',
+            asset: actif,
+            amount: montant,
+            direction: type_option.toUpperCase().includes('HAUSSE') ? 'call' : 'put',
+            time: 60
         };
 
-        brokerWs.send(JSON.stringify(realOrder));
+        brokerSocket.emit('message', pocketOrder, (response) => {
+            console.log('[POCKET OPTION] Réponse de l\'ordre en direct :', response);
+        });
 
         return res.json({
             success: true,
