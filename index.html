@@ -154,6 +154,30 @@
         </div>
 
         <button type="button" class="btn-debut" id="btn-executer">DÉBUT</button>
+
+        <!-- Tableau d'historique des signaux et trades intégrés -->
+        <div class="table-container" style="margin-top: 20px; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px;">
+            <h3 style="color: #fff; font-size: 16px; margin-bottom: 10px;">Historique des Signaux & Trades</h3>
+            <table style="width: 100%; color: #fff; text-align: left; font-size: 14px; border-collapse: collapse;">
+                <thead>
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.2);">
+                        <th style="padding: 8px;">Actif</th>
+                        <th style="padding: 8px;">Type</th>
+                        <th style="padding: 8px;">Montant</th>
+                        <th style="padding: 8px;">Statut</th>
+                    </tr>
+                </thead>
+                <tbody id="historique-table-body">
+                    <!-- Les lignes s'ajouteront dynamiquement ici -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Boutons d'export et d'effacement -->
+        <div style="display: flex; gap: 10px; margin-top: 15px;">
+            <button type="button" id="btn-export" style="flex: 1; padding: 12px; background: #2d3748; color: #fff; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">Exporter JSON</button>
+            <button type="button" id="btn-clear" style="flex: 1; padding: 12px; background: #c53030; color: #fff; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">Effacer</button>
+        </div>
     </div>
 
     <!-- Script principal (qui gère la PWA et les appels au serveur) -->
@@ -170,7 +194,31 @@
             const typeCompte = document.getElementById('type-compte').value;
 
             // Appel de la fonction mise à jour incluant le type de compte
-            executerTrade(actif, montant, typeOption, typeCompte);
+            if (typeof executerTrade === 'function') {
+                executerTrade(actif, montant, typeOption, typeCompte);
+            } else {
+                fetch('/api/trading/executer', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ actif, montant, type_option: typeOption, type_compte: typeCompte })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    alert(data.message);
+                    
+                    const tbody = document.getElementById('historique-table-body');
+                    const newRow = document.createElement('tr');
+                    const colorStyle = typeOption === 'CALL' ? 'color: #4ade80;' : 'color: #f87171;';
+                    newRow.innerHTML = `
+                        <td style="padding: 8px;">${actif}</td>
+                        <td style="padding: 8px; ${colorStyle}">${typeOption}</td>
+                        <td style="padding: 8px;">${montant} XOF</td>
+                        <td style="padding: 8px;">${data.resultat}</td>
+                    `;
+                    tbody.prepend(newRow);
+                })
+                .catch(err => console.error("Erreur:", err));
+            }
         });
 
         // Système de calcul automatique des paliers en temps réel

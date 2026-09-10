@@ -102,12 +102,12 @@ app.post('/api/trading/executer', (req, res) => {
         });
     }
 
-    // Mode simulation par défaut (si aucun jeton ou si compte Démo)
+    // Mode simulation par défaut (si aucun jeton ou si compte Démo ou si assistant d'analyse)
     res.json({
         success: true,
-        message: `Trade exécuté avec succès sur le compte ${type_compte || 'DEMO'} (Simulation)`,
+        message: `Signal validé et enregistré pour le compte ${type_compte || 'DEMO'} (Assistant Intelligent)`,
         id_trade: Date.now(),
-        resultat: "En attente..."
+        resultat: "Prêt pour exécution manuelle"
     });
 });
 
