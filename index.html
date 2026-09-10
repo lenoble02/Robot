@@ -1,0 +1,192 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Booster - Trading</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background-color: #0b0f19;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+        .container {
+            width: 100%;
+            max-width: 450px;
+            background: #131b2e;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        h2 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #4cd137;
+        }
+        .card-solde {
+            background: #1c263d;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .solde-info span {
+            display: block;
+            font-size: 12px;
+            color: #8899a6;
+        }
+        .solde-info strong {
+            font-size: 18px;
+            color: #fff;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+            color: #a0aec0;
+        }
+        input, select {
+            width: 100%;
+            padding: 12px;
+            background: #1c263d;
+            border: 1px solid #2d3748;
+            border-radius: 8px;
+            color: #fff;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+        .btn-debut {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #00c6ff, #0072ff);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: opacity 0.3s;
+        }
+        .btn-debut:hover {
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>AI Booster Robot</h2>
+
+        <!-- Affichage des Soldes -->
+        <div class="card-solde">
+            <div class="solde-info">
+                <span>Solde Démo</span>
+                <strong id="solde-demo">Chargement...</strong>
+            </div>
+        </div>
+
+        <div class="card-solde">
+            <div class="solde-info">
+                <span>Solde Réel</span>
+                <strong id="solde-reel">Chargement...</strong>
+            </div>
+        </div>
+
+        <!-- Formulaire de configuration du Trade -->
+        <div class="form-group">
+            <label for="type-compte">Type de compte</label>
+            <select id="type-compte">
+                <option value="DEMO">Compte Démo</option>
+                <option value="REEL">Compte Réel</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="actif">Actif (Marché)</label>
+            <select id="actif">
+                <option value="EUR/USD OTC">EUR/USD OTC</option>
+                <option value="GBP/USD OTC">GBP/USD OTC</option>
+                <option value="AUD/CAD OTC">AUD/CAD OTC</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="montant">Montant de départ (XOF)</label>
+            <input type="number" id="montant" value="500">
+        </div>
+
+        <div class="form-group">
+            <label for="type-option">Type d'option</label>
+            <select id="type-option">
+                <option value="CALL">HAUSSE (Call)</option>
+                <option value="PUT">BAISSE (Put)</option>
+            </select>
+        </div>
+
+        <!-- Section de calcul automatique (Série de trades / Martingale) -->
+        <div style="background: #1c263d; border-radius: 12px; padding: 15px; margin-bottom: 15px;">
+            <h3 style="font-size: 14px; color: #4cd137; margin-top: 0; margin-bottom: 10px;">Calculateur de Session (Martingale)</h3>
+            <div style="font-size: 13px; color: #a0aec0; display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <span>Étape 1 : <strong id="calc-step-1" style="color:#fff;">500 XOF</strong></span>
+                <span>Étape 2 : <strong id="calc-step-2" style="color:#fff;">1 050 XOF</strong></span>
+                <span>Étape 3 : <strong id="calc-step-3" style="color:#fff;">2 250 XOF</strong></span>
+            </div>
+            <div style="font-size: 12px; color: #00c6ff;">
+                Bénéfice estimé visé : <strong id="calc-benefice">+455 XOF</strong>
+            </div>
+        </div>
+
+        <button type="button" class="btn-debut" id="btn-executer">DÉBUT</button>
+    </div>
+
+    <!-- Script principal (qui gère la PWA et les appels au serveur) -->
+    <script src="app.js"></script>
+
+    <script>
+        // Script spécifique à cette page pour lier les boutons aux fonctions de app.js
+
+        // Intercepter le clic sur le bouton "DÉBUT" pour lancer un trade avec le compte sélectionné
+        document.getElementById('btn-executer').addEventListener('click', () => {
+            const actif = document.getElementById('actif').value;
+            const montant = document.getElementById('montant').value;
+            const typeOption = document.getElementById('type-option').value;
+            const typeCompte = document.getElementById('type-compte').value;
+
+            // Appel de la fonction mise à jour incluant le type de compte
+            executerTrade(actif, montant, typeOption, typeCompte);
+        });
+
+        // Système de calcul automatique des paliers en temps réel
+        document.getElementById('montant').addEventListener('input', function() {
+            const base = parseFloat(this.value) || 0;
+
+            const step1 = base;
+            const step2 = Math.round(base * 2.1);
+            const step3 = Math.round(base * 2.1 * 2.1);
+            const beneficeEstime = Math.round(base * 0.91);
+
+            document.getElementById('calc-step-1').textContent = `${step1.toLocaleString()} XOF`;
+            document.getElementById('calc-step-2').textContent = `${step2.toLocaleString()} XOF`;
+            document.getElementById('calc-step-3').textContent = `${step3.toLocaleString()} XOF`;
+            document.getElementById('calc-benefice').textContent = `+${beneficeEstime.toLocaleString()} XOF`;
+        });
+    </script>
+</body>
+</html>
