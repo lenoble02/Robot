@@ -124,7 +124,8 @@ app.post('/api/trading/executer', (req, res) => {
     });
 });
 
-// Lancement du serveur
-app.listen(PORT, () => {
-    console.log(`Serveur démarré avec succès ! Ouvrez http://localhost:${PORT} dans votre navigateur.`);
+// Lancement du serveur compatible Render (0.0.0.0)
+const HOST = '0.0.0.0';
+app.listen(PORT, HOST, () => {
+    console.log(`Serveur démarré avec succès sur http://${HOST}:${PORT}`);
 });
