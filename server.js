@@ -1,108 +1,105 @@
 
+const fs = require('fs');
+if (fs.existsSync('.env')) {
+    const envConfig = require('dotenv').parse(fs.readFileSync('.env'));
+    for (const k in envConfig) {
+        process.env[k] = envConfig[k];
+    }
+}
+
 const express = require('express');
 const path = require('path');
-const ioClient = require('socket.io-client');
+const ccxt = require('ccxt');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Récupération sécurisée du jeton ou identifiant de session depuis Render
-const BROKER_API_TOKEN = process.env.BROKER_API_TOKEN || '';
+// --- CONFIGURATION BINANCE VIA .ENV ---
+const binanceApiKey = process.env.BINANCE_API_KEY;
+const binanceSecretKey = process.env.BINANCE_SECRET_KEY;
 
-// Middleware pour lire les données JSON et les formulaires
+// Initialisation du client Binance pour le trading réel Spot
+const exchange = new ccxt.binance({
+    apiKey: binanceApiKey ? binanceApiKey.trim() : '',
+    secret: binanceSecretKey ? binanceSecretKey.trim() : '',
+    options: { defaultType: 'spot' }
+});
+
+// Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// Rendre le dossier courant accessible publiquement (pour vos fichiers HTML, app.js, images, sw.js)
 app.use(express.static(path.join(__dirname)));
 
-// --- CONFIGURATION WEBSOCKET POCKET OPTION ---
-let brokerSocket = null;
-let isBrokerConnected = false;
-
-function connectToPocketOption() {
-    // Si aucun jeton de session n'est configuré, on reste en mode simulation propre
-    if (!BROKER_API_TOKEN) {
-        console.log('[POCKET OPTION] Aucun jeton de session détecté. Fonctionnement en mode simulation propre.');
-        return;
-    }
-
-    console.log('[POCKET OPTION] Connexion en cours vers le serveur de trading réel...');
-    
-    // Connexion via Socket.IO avec l'identifiant de session sécurisé
-    brokerSocket = ioClient('https://pocketoption.com', {
-        path: '/socket.io/',
-        transports: ['websocket'],
-        query: {
-            session: BROKER_API_TOKEN
-        }
-    });
-
-    brokerSocket.on('connect', () => {
-        isBrokerConnected = true;
-        console.log('[POCKET OPTION] Connecté avec succès au compte réel en temps réel !');
-    });
-
-    brokerSocket.on('disconnect', () => {
-        isBrokerConnected = false;
-        console.log('[POCKET OPTION] Déconnecté du courtier. Tentative de reconnexion...');
-    });
-
-    brokerSocket.on('connect_error', (error) => {
-        console.error('[POCKET OPTION] Erreur de connexion WebSocket :', error.message);
-    });
-}
-
-// Lancer la tentative de connexion au démarrage
-connectToPocketOption();
-
-
-// --- ROUTES DE VOTRE APPLICATION WEB ---
-
-// Route par défaut (charge votre page principale)
+// Route principale
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// --- API DE TRADING ---
+// 1. Récupération des soldes réels depuis Binance
+app.get('/api/trading/solde', async (req, res) => {
+    try {
+        if (!binanceApiKey || !binanceSecretKey) {
+            throw new Error("Clés API Binance non configurées dans le fichier .env");
+        }
 
-// 1. Récupérer les soldes (Démo / Réel)
-app.get('/api/trading/solde', (req, res) => {
-    res.json({
-        solde_demo: 50043.15,
-        solde_reel: 106.89,
-        devise: "XOF"
-    });
+        const balance = await exchange.fetchBalance();
+        const usdtFree = balance.free['USDT'] || 0;
+
+        console.log('[BINANCE] Solde récupéré avec succès !');
+
+        res.json({
+            solde_demo: 50043.15,
+            solde_reel: usdtFree,
+            devise: "USDT"
+        });
+    } catch (error) {
+        console.error('[BINANCE] Erreur lors de la récupération des soldes :', error.message);
+
+        res.json({
+            solde_demo: 50043.15,
+            solde_reel: 0.00,
+            devise: "USDT",
+            erreur: "Impossible de joindre Binance (Vérifiez les clés ou les restrictions)"
+        });
+    }
 });
 
-// 2. Recevoir un ordre de trade depuis votre interface web ou votre bot
-app.post('/api/trading/executer', (req, res) => {
-    const { actif, montant, type_option, type_compte } = req.body; 
+// 2. Exécution d'un ordre réel ou d'une simulation
+app.post('/api/trading/executer', async (req, res) => {
+    const { actif, montant, type_option, type_compte } = req.body;
 
     console.log(`[BOT TRADING] Compte: ${type_compte || 'DEMO'} | Actif: ${actif}, Montant: ${montant}, Type: ${type_option}`);
 
-    // Si le jeton de session est présent, que le compte est Réel et que le WebSocket est connecté -> Vrai trade
-    if (BROKER_API_TOKEN && isBrokerConnected && type_compte === 'REEL') {
-        const pocketOrder = {
-            action: 'open_order',
-            asset: actif,
-            amount: montant,
-            direction: type_option.toUpperCase().includes('HAUSSE') ? 'call' : 'put',
-            time: 60
-        };
+    if (type_compte === 'REEL' && binanceApiKey) {
+        try {
+            let symbol = 'XLM/USDT';
+            if (actif && actif.includes('/')) {
+                symbol = actif.replace(' OTC', '');
+            }
 
-        brokerSocket.emit('message', pocketOrder, (response) => {
-            console.log('[POCKET OPTION] Réponse de l\'ordre en direct :', response);
-        });
+            const side = type_option === 'CALL' ? 'buy' : 'sell';
+            const quantity = parseFloat(montant) || 10;
 
-        return res.json({
-            success: true,
-            message: `Ordre réel transmis au marché en direct sur le compte ${type_compte} !`,
-            id_trade: Date.now(),
-            resultat: "Exécuté en direct"
-        });
+            const order = await exchange.createOrder(symbol, 'market', side, quantity);
+            console.log('[BINANCE] Ordre réel exécuté avec succès :', order);
+
+            res.json({
+                success: true,
+                message: `Ordre ${side.toUpperCase()} de ${quantity} exécuté avec succès sur Binance (${symbol}) !`,
+                id_trade: order.id || Date.now(),
+                resultat: "Exécuté sur Binance"
+            });
+        } catch (error) {
+            console.error('[BINANCE] Erreur d\'exécution :', error.message);
+            res.status(500).json({
+                success: false,
+                message: `Erreur Binance: ${error.message}`,
+                resultat: "Échec d'exécution"
+            });
+        }
+        return;
     }
 
-    // Mode simulation par défaut (si aucun jeton ou si compte Démo ou si assistant d'analyse)
+    // Mode simulation par défaut (Compte Démo)
     res.json({
         success: true,
         message: `Signal validé et enregistré pour le compte ${type_compte || 'DEMO'} (Assistant Intelligent)`,
@@ -111,7 +108,7 @@ app.post('/api/trading/executer', (req, res) => {
     });
 });
 
-// Lancement du serveur compatible Render (0.0.0.0)
+// Lancement du serveur
 const HOST = '0.0.0.0';
 app.listen(PORT, HOST, () => {
     console.log(`Serveur démarré avec succès sur http://${HOST}:${PORT}`);
