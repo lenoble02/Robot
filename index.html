@@ -2,9 +2,8 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Booster - Trading</title>
@@ -14,7 +13,7 @@
             background-color: #0b0f19;
             color: #ffffff;
             margin: 0;
-            padding: 20px;
+            padding: 10px;
             display: flex;
             justify-content: center;
             align-items: center;
@@ -26,62 +25,86 @@
             max-width: 450px;
             background: #131b2e;
             border-radius: 16px;
-            padding: 20px;
+            padding: 15px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.5);
         }
         h2 {
             text-align: center;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             color: #4cd137;
+            font-size: 18px;
         }
         .card-solde {
             background: #1c263d;
             border-radius: 12px;
-            padding: 15px;
-            margin-bottom: 15px;
+            padding: 12px;
+            margin-bottom: 10px;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
         .solde-info span {
             display: block;
-            font-size: 12px;
+            font-size: 11px;
             color: #8899a6;
         }
         .solde-info strong {
-            font-size: 18px;
+            font-size: 16px;
             color: #fff;
         }
         .form-group {
-            margin-bottom: 15px;
+            margin-bottom: 12px;
         }
         label {
             display: block;
-            margin-bottom: 5px;
-            font-size: 14px;
+            margin-bottom: 4px;
+            font-size: 13px;
             color: #a0aec0;
         }
         input, select {
             width: 100%;
-            padding: 12px;
+            padding: 10px;
             background: #1c263d;
             border: 1px solid #2d3748;
             border-radius: 8px;
             color: #fff;
             box-sizing: border-box;
-            font-size: 16px;
+            font-size: 14px;
+        }
+        .timeframe-container {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 8px;
+        }
+        .tf-btn {
+            flex: 1;
+            padding: 6px 2px;
+            background: #1c263d;
+            border: 1px solid #2d3748;
+            border-radius: 6px;
+            color: #8899a6;
+            font-size: 11px;
+            font-weight: bold;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.2s;
+        }
+        .tf-btn.active {
+            background: #0072ff;
+            color: #fff;
+            border-color: #00c6ff;
         }
         .btn-debut {
             width: 100%;
-            padding: 15px;
+            padding: 14px;
             background: linear-gradient(135deg, #00c6ff, #0072ff);
             color: white;
             border: none;
             border-radius: 12px;
-            font-size: 18px;
+            font-size: 16px;
             font-weight: bold;
             cursor: pointer;
-            margin-top: 10px;
+            margin-top: 5px;
             transition: opacity 0.3s;
         }
         .btn-debut:hover {
@@ -95,145 +118,366 @@
         <h2>AI Booster Robot</h2>
 
         <!-- Affichage des Soldes -->
-        <div class="card-solde">
-            <div class="solde-info">
-                <span>Solde Démo</span>
-                <strong id="solde-demo">Chargement...</strong>
+        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+            <div class="card-solde" style="flex: 1; margin-bottom: 0;">
+                <div class="solde-info">
+                    <span>Solde Démo</span>
+                    <strong id="solde-demo">Chargement...</strong>
+                </div>
+            </div>
+            <div class="card-solde" style="flex: 1; margin-bottom: 0;">
+                <div class="solde-info">
+                    <span>Solde Réel</span>
+                    <strong id="solde-reel">0 USDT</strong>
+                </div>
             </div>
         </div>
 
-        <div class="card-solde">
-            <div class="solde-info">
-                <span>Solde Réel</span>
-                <strong id="solde-reel">Chargement...</strong>
+        <!-- Section Graphique Dynamique -->
+        <div style="background: #1c263d; border-radius: 12px; padding: 10px; margin-bottom: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <select id="actif" style="width: 55%; padding: 6px; font-size: 13px;">
+                    <option value="BTC/USDT">Bitcoin (BTC/USDT)</option>
+                    <option value="ETH/USDT">Ethereum (ETH/USDT)</option>
+                    <option value="SOL/USDT">Solana (SOL/USDT)</option>
+                    <option value="XLM/USDT">Stellar (XLM/USDT)</option>
+                </select>
+                <span id="prix-actuel" style="font-size: 13px; color: #4ade80; font-weight: bold;">-- USDT</span>
+            </div>
+
+            <!-- Boutons de réglage des unités de temps -->
+            <div class="timeframe-container">
+                <button type="button" class="tf-btn" data-tf="5s" data-sec="5">5s</button>
+                <button type="button" class="tf-btn" data-tf="30s" data-sec="30">30s</button>
+                <button type="button" class="tf-btn active" data-tf="1m" data-sec="60">1m</button>
+                <button type="button" class="tf-btn" data-tf="5m" data-sec="300">5m</button>
+                <button type="button" class="tf-btn" data-tf="1h" data-sec="3600">1h</button>
+            </div>
+
+            <!-- Hauteur fixe obligatoire pour l'affichage du canvas -->
+            <div style="position: relative; height: 180px; width: 100%;">
+                <canvas id="graphiquePrix"></canvas>
             </div>
         </div>
 
         <!-- Formulaire de configuration du Trade -->
-        <div class="form-group">
-            <label for="type-compte">Type de compte</label>
-            <select id="type-compte">
-                <option value="DEMO">Compte Démo</option>
-                <option value="REEL">Compte Réel</option>
-            </select>
-        </div>
-
-        <div class="form-group">
-            <label for="actif">Actif (Marché)</label>
-            <select id="actif">
-                <option value="EUR/USD OTC">EUR/USD OTC</option>
-                <option value="GBP/USD OTC">GBP/USD OTC</option>
-                <option value="AUD/CAD OTC">AUD/CAD OTC</option>
-            </select>
+        <div style="display: flex; gap: 10px;">
+            <div class="form-group" style="flex: 1;">
+                <label for="type-compte">Compte</label>
+                <select id="type-compte">
+                    <option value="DEMO">Démo</option>
+                    <option value="REEL">Réel</option>
+                </select>
+            </div>
+            <div class="form-group" style="flex: 1;">
+                <label for="type-option">Option</label>
+                <select id="type-option">
+                    <option value="CALL">Hausse (Call)</option>
+                    <option value="PUT">Baisse (Put)</option>
+                </select>
+            </div>
         </div>
 
         <div class="form-group">
             <label for="montant">Montant de départ (XOF)</label>
-            <input type="number" id="montant" value="500">
+            <input type="number" id="montant" value="10">
         </div>
 
-        <div class="form-group">
-            <label for="type-option">Type d'option</label>
-            <select id="type-option">
-                <option value="CALL">HAUSSE (Call)</option>
-                <option value="PUT">BAISSE (Put)</option>
-            </select>
-        </div>
+        <button type="button" class="btn-debut" id="btn-executer">DÉBUT (<span id="label-expiration">1m</span>)</button>
 
-        <!-- Section de calcul automatique (Série de trades / Martingale) -->
-        <div style="background: #1c263d; border-radius: 12px; padding: 15px; margin-bottom: 15px;">
-            <h3 style="font-size: 14px; color: #4cd137; margin-top: 0; margin-bottom: 10px;">Calculateur de Session (Martingale)</h3>
-            <div style="font-size: 13px; color: #a0aec0; display: flex; justify-content: space-between; margin-bottom: 8px;">
-                <span>Étape 1 : <strong id="calc-step-1" style="color:#fff;">500 XOF</strong></span>
-                <span>Étape 2 : <strong id="calc-step-2" style="color:#fff;">1 050 XOF</strong></span>
-                <span>Étape 3 : <strong id="calc-step-3" style="color:#fff;">2 250 XOF</strong></span>
-            </div>
-            <div style="font-size: 12px; color: #00c6ff;">
-                Bénéfice estimé visé : <strong id="calc-benefice">+455 XOF</strong>
-            </div>
-        </div>
-
-        <button type="button" class="btn-debut" id="btn-executer">DÉBUT</button>
-
-        <!-- Tableau d'historique des signaux et trades intégrés -->
-        <div class="table-container" style="margin-top: 20px; background: rgba(255,255,255,0.05); padding: 15px; border-radius: 10px;">
-            <h3 style="color: #fff; font-size: 16px; margin-bottom: 10px;">Historique des Signaux & Trades</h3>
-            <table style="width: 100%; color: #fff; text-align: left; font-size: 14px; border-collapse: collapse;">
+        <!-- Tableau d'historique -->
+        <div class="table-container" style="margin-top: 15px; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 10px;">
+            <h3 style="color: #fff; font-size: 14px; margin-bottom: 8px; margin-top: 0;">Historique des Trades</h3>
+            <table style="width: 100%; color: #fff; text-align: left; font-size: 12px; border-collapse: collapse;">
                 <thead>
                     <tr style="border-bottom: 1px solid rgba(255,255,255,0.2);">
-                        <th style="padding: 8px;">Actif</th>
-                        <th style="padding: 8px;">Type</th>
-                        <th style="padding: 8px;">Montant</th>
-                        <th style="padding: 8px;">Statut</th>
+                        <th style="padding: 6px;">Actif</th>
+                        <th style="padding: 6px;">Type</th>
+                        <th style="padding: 6px;">Montant</th>
+                        <th style="padding: 6px;">Statut</th>
                     </tr>
                 </thead>
                 <tbody id="historique-table-body">
-                    <!-- Les lignes s'ajouteront dynamiquement ici -->
                 </tbody>
             </table>
         </div>
-
-        <!-- Boutons d'export et d'effacement -->
-        <div style="display: flex; gap: 10px; margin-top: 15px;">
-            <button type="button" id="btn-export" style="flex: 1; padding: 12px; background: #2d3748; color: #fff; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">Exporter JSON</button>
-            <button type="button" id="btn-clear" style="flex: 1; padding: 12px; background: #c53030; color: #fff; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">Effacer</button>
-        </div>
     </div>
 
-    <!-- Script principal (qui gère la PWA et les appels au serveur) -->
     <script src="app.js"></script>
-
     <script>
-        // Script spécifique à cette page pour lier les boutons aux fonctions de app.js
+        let monGraphique = null;
+        let timeframeActuel = '1m';
+        let dureeSecondes = 60;
 
-        // Intercepter le clic sur le bouton "DÉBUT" pour lancer un trade avec le compte sélectionné
+        // Plugin personnalisé : point lumineux visible et étiquette positionnée juste après avec ligne traversante
+        const pointBrillantEtLignePlugin = {
+            id: 'pointBrillantEtLigne',
+            afterDraw(chart) {
+                const dataset = chart.data.datasets[0];
+                if (!dataset || !dataset.data || dataset.data.length === 0) return;
+
+                const meta = chart.getDatasetMeta(0);
+                const dernierPointIndex = dataset.data.length - 1;
+                const point = meta.data[dernierPointIndex];
+                if (!point) return;
+
+                const ctx = chart.ctx;
+                const xPixel = point.x;
+                const yPixel = point.y;
+                const xAxis = chart.scales.x;
+                const dernierPrix = dataset.data[dernierPointIndex];
+
+                ctx.save();
+
+                const textePrix = dernierPrix.toFixed(2);
+                ctx.font = '10px sans-serif';
+                const largeurTexte = ctx.measureText(textePrix).width;
+                const largeurEtiquette = largeurTexte + 16;
+                const xEtiquette = xPixel + 12;
+
+                // Ligne pointillée horizontale traversante
+                ctx.beginPath();
+                ctx.setLineDash([4, 4]);
+                ctx.moveTo(xAxis.left, yPixel);
+                ctx.lineTo(xAxis.right, yPixel);
+                ctx.strokeStyle = '#00c6ff';
+                ctx.lineWidth = 1.2;
+                ctx.stroke();
+
+                // Point lumineux au bout
+                ctx.shadowBlur = 12;
+                ctx.shadowColor = '#00c6ff';
+                ctx.fillStyle = '#00c6ff';
+                ctx.beginPath();
+                ctx.arc(xPixel, yPixel, 5, 0, 2 * Math.PI);
+                ctx.fill();
+
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(xPixel, yPixel, 2, 0, 2 * Math.PI);
+                ctx.fill();
+
+                // Étiquette du prix
+                const yEtiquette = yPixel - 9;
+                ctx.fillStyle = '#0072ff';
+                ctx.fillRect(xEtiquette, yEtiquette, largeurEtiquette, 18);
+                
+                ctx.fillStyle = '#ffffff';
+                ctx.fillText(textePrix, xEtiquette + 8, yPixel + 3);
+
+                ctx.restore();
+            }
+        };
+
+        function initialiserGraphique() {
+            const ctx = document.getElementById('graphiquePrix').getContext('2d');
+            monGraphique = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Prix',
+                        data: [],
+                        borderColor: '#00c6ff',
+                        backgroundColor: 'rgba(0, 198, 255, 0.15)',
+                        borderWidth: 2,
+                        fill: true,
+                        pointRadius: 0,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    layout: {
+                        padding: { right: 85 }
+                    },
+                    scales: {
+                        x: { display: false },
+                        y: { 
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#8899a6', font: { size: 10 } }
+                        }
+                    }
+                },
+                plugins: [pointBrillantEtLignePlugin]
+            });
+        }
+
+        function actualiserSoldes() {
+            fetch('/api/trading/solde')
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('solde-demo').textContent = `${data.solde_demo.toLocaleString()} ${data.devise}`;
+                })
+                .catch(err => console.error("Erreur soldes :", err));
+        }
+
+        function chargerBougies(actif, tf) {
+            const symbol = actif.replace(' OTC', '');
+            fetch(`/api/trading/bougies?symbol=${symbol}&timeframe=${tf}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success && data.bougies.length > 0) {
+                        const labels = data.bougies.map(b => new Date(b.temps).toLocaleTimeString());
+                        const prix = data.bougies.map(b => b.cloture);
+
+                        monGraphique.data.labels = labels;
+                        monGraphique.data.datasets[0].data = prix;
+                        monGraphique.update();
+
+                        const dernierPrix = prix[prix.length - 1];
+                        document.getElementById('prix-actuel').textContent = `${dernierPrix} USDT`;
+                    }
+                })
+                .catch(err => console.error("Erreur bougies :", err));
+        }
+
+        // Charger l'historique depuis localStorage au démarrage (limité aux 10 derniers affichés)
+        function chargerHistoriqueLocalStorage() {
+            const historique = JSON.parse(localStorage.getItem('ai_booster_historique')) || [];
+            const tbody = document.getElementById('historique-table-body');
+            tbody.innerHTML = '';
+            
+            // On prend les 10 plus récents pour l'affichage
+            historique.slice(0, 10).forEach(item => {
+                const newRow = document.createElement('tr');
+                const colorStyle = item.typeOption === 'CALL' ? 'color: #4ade80;' : 'color: #f87171;';
+                newRow.innerHTML = `
+                    <td style="padding: 6px;">${item.actif} (${item.timeframe})</td>
+                    <td style="padding: 6px; ${colorStyle}">${item.typeOption}</td>
+                    <td style="padding: 6px;">${item.montant} XOF</td>
+                    <td style="padding: 6px; ${item.resultatCouleur} font-weight: bold;">${item.resultatTexte}</td>
+                `;
+                tbody.appendChild(newRow);
+            });
+        }
+
+        function sauvegarderEtAfficherTrade(tradeData) {
+            let historique = JSON.parse(localStorage.getItem('ai_booster_historique')) || [];
+            // Ajout au début du tableau global (stockage persistant complet)
+            historique.unshift(tradeData);
+            localStorage.setItem('ai_booster_historique', JSON.stringify(historique));
+
+            // Recharge l'affichage pour respecter la limite des 10 affichés à l'écran
+            chargerHistoriqueLocalStorage();
+        }
+
+        initialiserGraphique();
+        actualiserSoldes();
+        chargerHistoriqueLocalStorage();
+        const actifInitial = document.getElementById('actif').value;
+        chargerBougies(actifInitial, timeframeActuel);
+
+        document.querySelectorAll('.tf-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                timeframeActuel = this.getAttribute('data-tf');
+                dureeSecondes = parseInt(this.getAttribute('data-sec'));
+                document.getElementById('label-expiration').textContent = timeframeActuel;
+                
+                const actifActuel = document.getElementById('actif').value;
+                chargerBougies(actifActuel, timeframeActuel);
+            });
+        });
+
+        setInterval(() => {
+            const actifActuel = document.getElementById('actif').value;
+            chargerBougies(actifActuel, timeframeActuel);
+            actualiserSoldes();
+        }, 5000);
+
+        document.getElementById('actif').addEventListener('change', function() {
+            chargerBougies(this.value, timeframeActuel);
+        });
+
+        // Logique de trade avec compte à rebours, comparaison stricte (> / <) et persistance localStorage (10 affichés)
         document.getElementById('btn-executer').addEventListener('click', () => {
             const actif = document.getElementById('actif').value;
             const montant = document.getElementById('montant').value;
             const typeOption = document.getElementById('type-option').value;
             const typeCompte = document.getElementById('type-compte').value;
 
-            // Appel de la fonction mise à jour incluant le type de compte
-            if (typeof executerTrade === 'function') {
-                executerTrade(actif, montant, typeOption, typeCompte);
-            } else {
-                fetch('/api/trading/executer', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ actif, montant, type_option: typeOption, type_compte: typeCompte })
-                })
-                .then(res => res.json())
-                .then(data => {
-                    alert(data.message);
-                    
-                    const tbody = document.getElementById('historique-table-body');
-                    const newRow = document.createElement('tr');
-                    const colorStyle = typeOption === 'CALL' ? 'color: #4ade80;' : 'color: #f87171;';
-                    newRow.innerHTML = `
-                        <td style="padding: 8px;">${actif}</td>
-                        <td style="padding: 8px; ${colorStyle}">${typeOption}</td>
-                        <td style="padding: 8px;">${montant} XOF</td>
-                        <td style="padding: 8px;">${data.resultat}</td>
-                    `;
-                    tbody.prepend(newRow);
-                })
-                .catch(err => console.error("Erreur:", err));
+            const dataset = monGraphique.data.datasets[0].data;
+            if (!dataset || dataset.length === 0) {
+                alert("Patientez, le graphique est en cours de chargement...");
+                return;
             }
-        });
 
-        // Système de calcul automatique des paliers en temps réel
-        document.getElementById('montant').addEventListener('input', function() {
-            const base = parseFloat(this.value) || 0;
+            const prixDepart = dataset[dataset.length - 1];
+            const btnExec = document.getElementById('btn-executer');
+            btnExec.disabled = true;
 
-            const step1 = base;
-            const step2 = Math.round(base * 2.1);
-            const step3 = Math.round(base * 2.1 * 2.1);
-            const beneficeEstime = Math.round(base * 0.91);
+            let tempsRestant = dureeSecondes;
 
-            document.getElementById('calc-step-1').textContent = `${step1.toLocaleString()} XOF`;
-            document.getElementById('calc-step-2').textContent = `${step2.toLocaleString()} XOF`;
-            document.getElementById('calc-step-3').textContent = `${step3.toLocaleString()} XOF`;
-            document.getElementById('calc-benefice').textContent = `+${beneficeEstime.toLocaleString()} XOF`;
+            const intervalCompteARebours = setInterval(() => {
+                btnExec.innerHTML = `Trade en cours... (${tempsRestant}s)`;
+                tempsRestant--;
+
+                if (tempsRestant < 0) {
+                    clearInterval(intervalCompteARebours);
+
+                    const datasetActuel = monGraphique.data.datasets[0].data;
+                    const prixArrivee = datasetActuel && datasetActuel.length > 0 ? datasetActuel[datasetActuel.length - 1] : prixDepart;
+
+                    let resultatTexte = "Perdu";
+                    let resultatCouleur = "color: #f87171;";
+
+                    // Comparaison stricte demandée
+                    if (typeOption === 'CALL') {
+                        if (prixArrivee > prixDepart) {
+                            resultatTexte = "Gain";
+                            resultatCouleur = "color: #4ade80;";
+                        }
+                    } else if (typeOption === 'PUT') {
+                        if (prixArrivee < prixDepart) {
+                            resultatTexte = "Gain";
+                            resultatCouleur = "color: #4ade80;";
+                        }
+                    }
+
+                    fetch('/api/trading/executer', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            actif, 
+                            montant, 
+                            type_option: typeOption, 
+                            type_compte: typeCompte,
+                            duree: dureeSecondes,
+                            resultat: resultatTexte
+                        })
+                    })
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.nouveau_solde_demo !== undefined) {
+                            document.getElementById('solde-demo').textContent = `${data.nouveau_solde_demo.toLocaleString()} USDT`;
+                        } else {
+                            actualiserSoldes();
+                        }
+                    })
+                    .catch(err => {
+                        console.error("Erreur API:", err);
+                        actualiserSoldes();
+                    });
+
+                    // Enregistrement et affichage persistant (max 10 affichés, tout est conservé en arrière-plan)
+                    sauvegarderEtAfficherTrade({
+                        actif,
+                        timeframe: timeframeActuel,
+                        typeOption,
+                        montant,
+                        resultatTexte,
+                        resultatCouleur
+                    });
+
+                    btnExec.disabled = false;
+                    btnExec.innerHTML = `DÉBUT (<span id="label-expiration">${timeframeActuel}</span>)`;
+                }
+            }, 1000);
         });
     </script>
 </body>
