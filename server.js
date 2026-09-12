@@ -17,23 +17,21 @@ const binanceApiKey = process.env.BINANCE_API_KEY;
 const binanceSecretKey = process.env.BINANCE_SECRET_KEY;
 
 let soldeDemoCourant = 50043.15;
-let miseStrategie = 5;
-let directionStrategie = 'CALL'; // Direction par défaut du tout premier trade
+let miseStrategie = 5; // Modifié à 5 pour respecter le minimum de Binance (min notional)
+let directionStrategie = 'CALL';
 
 const exchange = new ccxt.binance({
     apiKey: binanceApiKey ? binanceApiKey.trim() : '',
     secret: binanceSecretKey ? binanceSecretKey.trim() : '',
-    options: { defaultType: 'spot' }
+    options: { defaultType: 'spot', timeout: 15000 } // Timeout élargi à 15s
 });
 
-(async () => {
-    try {
-        await exchange.loadMarkets();
-        console.log("Marchés Binance chargés avec succès.");
-    } catch (e) {
-        console.error("Erreur lors du chargement des marchés Binance :", e.message);
-    }
-})();
+// Chargement non bloquant des marchés pour éviter les crashs de démarrage
+exchange.loadMarkets().then(() => {
+    console.log("Marchés Binance chargés avec succès.");
+}).catch(e => {
+    console.warn("Attention: Chargement différé des marchés Binance :", e.message);
+});
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -56,6 +54,7 @@ app.get('/api/trading/solde', async (req, res) => {
             devise: "USDT"
         });
     } catch (error) {
+        // En cas de coupure réseau, on renvoie le solde démo sans planter l'app
         res.json({
             solde_demo: parseFloat(soldeDemoCourant.toFixed(2)),
             solde_reel: 0.00,
@@ -64,11 +63,37 @@ app.get('/api/trading/solde', async (req, res) => {
     }
 });
 
+// Nouvelle route pour récupérer l'historique des ordres réels (Achats / Ventes) depuis Binance
+app.get('/api/trading/historique-reel', async (req, res) => {
+    try {
+        const symbol = req.query.symbol || 'BTC/USDT';
+        if (!binanceApiKey || !binanceSecretKey) {
+            return res.json({ success: true, ordres: [] });
+        }
+
+        // Récupération des ordres fermés (exécutés ou annulés) sur l'actif concerné
+        const closedOrders = await exchange.fetchClosedOrders(symbol, undefined, 20);
+        
+        const ordresFormates = closedOrders.map(o => ({
+            id: o.id,
+            heure: new Date(o.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            actif: o.symbol,
+            typeOption: o.side === 'buy' ? 'CALL' : 'PUT',
+            montant: o.cost || (o.amount * o.price),
+            resultatTexte: o.status === 'closed' ? 'Exécuté' : o.status,
+            resultatCouleur: o.status === 'closed' ? 'color: #4ade80;' : 'color: #f87171;'
+        }));
+
+        res.json({ success: true, ordres: ordresFormates });
+    } catch (error) {
+        res.status(500).json({ success: false, erreur: error.message });
+    }
+});
+
 app.post('/api/trading/executer', async (req, res) => {
     const { actif, montant, type_option, type_compte, strategie_active, phase, resultat } = req.body;
     const cryptoChoisie = actif || 'BTC/USDT';
 
-    // 1. PHASE DE DÉBUT : Le bot prend exactement les valeurs actuelles en mémoire
     if (phase === 'DEBUT') {
         let montantUtilise = parseFloat(montant) || 5;
         let optionUtilisee = type_option;
@@ -85,16 +110,12 @@ app.post('/api/trading/executer', async (req, res) => {
         });
     }
 
-    // 2. PHASE DE FIN : C'est ici qu'on évalue le résultat et qu'on met à jour pour le trade SUIVANT
     let miseActuelle = parseFloat(montant) || 5;
 
     if (strategie_active) {
         if (resultat === "Gain") {
-            // GAIN : On redescend la mise à 5, et on GARDE EXACTEMENT LA MÊME DIRECTION (pas d'inversion)
-            miseStrategie = 5;
-            // directionStrategie NE CHANGE PAS (si on a gagné en PUT, on refait PUT)
+            miseStrategie = 5; // Réinitialisation de la mise à 5 en cas de gain
         } else if (resultat === "Perdu") {
-            // PERTE : On double la mise et on INVERSE la direction pour le prochain trade
             miseStrategie = miseActuelle * 2;
             directionStrategie = (directionStrategie === 'CALL') ? 'PUT' : 'CALL';
         }
@@ -106,7 +127,10 @@ app.post('/api/trading/executer', async (req, res) => {
         try {
             const symbol = cryptoChoisie.replace(' OTC', '');
             const side = optionFinale === 'CALL' ? 'buy' : 'sell';
-            const quantite = miseActuelle / 70000;
+
+            const ticker = await exchange.fetchTicker(symbol);
+            const prixActuel = ticker.last || 70000;
+            const quantite = miseActuelle / prixActuel;
 
             await exchange.createOrder(symbol, 'market', side, quantite);
 

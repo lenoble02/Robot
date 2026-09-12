@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -132,10 +131,9 @@
     </style>
 </head>
 <body>
-
     <div class="container">
         <h2>AI Booster Robot</h2>
-
+        
         <div style="display: flex; gap: 10px; margin-bottom: 10px;">
             <div class="card-solde" style="flex: 1; margin-bottom: 0;">
                 <div class="solde-info">
@@ -163,7 +161,6 @@
                 </select>
                 <span id="prix-actuel" style="font-size: 13px; color: #4ade80; font-weight: bold;">-- USDT</span>
             </div>
-
             <div class="timeframe-container">
                 <button type="button" class="tf-btn" data-tf="5s" data-sec="5">5s</button>
                 <button type="button" class="tf-btn" data-tf="30s" data-sec="30">30s</button>
@@ -171,7 +168,6 @@
                 <button type="button" class="tf-btn" data-tf="5m" data-sec="300">5m</button>
                 <button type="button" class="tf-btn" data-tf="1h" data-sec="3600">1h</button>
             </div>
-
             <div style="position: relative; height: 180px; width: 100%;">
                 <canvas id="graphiquePrix"></canvas>
             </div>
@@ -195,8 +191,8 @@
         </div>
 
         <div class="form-group">
-            <label for="montant">Montant de départ ($5 auto)</label>
-            <input type="number" id="montant" value="10">
+            <label for="montant">Montant de départ ($1 auto)</label>
+            <input type="number" id="montant" value="1">
         </div>
 
         <button type="button" class="btn-debut" id="btn-executer">DÉBUT (<span id="label-expiration">1m</span>)</button>
@@ -217,6 +213,9 @@
                 </tbody>
             </table>
         </div>
+
+        <!-- Bouton pour accéder à tout l'historique -->
+        <a href="historique.html" style="display: block; width: 100%; padding: 10px; background: #1c263d; color: #00c6ff; border: 1px solid #2d3748; border-radius: 10px; text-align: center; text-decoration: none; font-weight: bold; font-size: 13px; margin-top: 10px; box-sizing: border-box;">Voir tout l'historique →</a>
     </div>
 
     <script src="app.js"></script>
@@ -238,7 +237,7 @@
             if (strategieActive) {
                 btnToggleStrat.classList.add('active-strat');
                 btnToggleStrat.textContent = "Arrêter la Stratégie Auto (ON)";
-                inputMontant.value = 5;
+                inputMontant.value = 1;
                 inputMontant.disabled = true;
                 lancerProchainCycle();
             } else {
@@ -259,7 +258,7 @@
             afterDraw(chart) {
                 const dataset = chart.data.datasets[0];
                 if (!dataset || !dataset.data || dataset.data.length === 0) return;
-
+                
                 const meta = chart.getDatasetMeta(0);
                 const dernierPointIndex = dataset.data.length - 1;
                 const point = meta.data[dernierPointIndex];
@@ -426,6 +425,7 @@
         chargerHistoriqueLocalStorage();
         const actifInitial = document.getElementById('actif').value;
         chargerBougies(actifInitial, timeframeActuel);
+
         setInterval(() => {
             const actifActuel = document.getElementById('actif').value;
             chargerBougies(actifActuel, timeframeActuel);
@@ -498,8 +498,6 @@
                         }
 
                         const heureActuelle = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-                        // Affichage d'une pause d'analyse de 2.5 secondes
                         btnExec.innerHTML = `Analyse du gain...`;
 
                         fetch('/api/trading/executer', {
@@ -532,14 +530,13 @@
                             sauvegarderEtAfficherTrade({
                                 heure: heureActuelle,
                                 actif,
-                                timefame: timeframeActuel,
+                                timeframe: timeframeActuel,
                                 typeOption: directionJouee,
                                 montant: montantJoue,
                                 resultatTexte,
                                 resultatCouleur
                             });
 
-                            // LAISSER 2.5 SECONDES DE PAUSE AVANT DE RELANCER LE PROCHAIN CYCLE
                             if (strategieActive) {
                                 timeoutStrategie = setTimeout(() => {
                                     lancerProchainCycle();

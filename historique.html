@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Booster - Historique Complet</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background-color: #0b0f19;
+            color: #ffffff;
+            margin: 0;
+            padding: 10px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+        .container {
+            width: 100%;
+            max-width: 450px;
+            background: #131b2e;
+            border-radius: 16px;
+            padding: 15px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        h2 {
+            text-align: center;
+            margin-bottom: 15px;
+            color: #4cd137;
+            font-size: 18px;
+        }
+        .btn-retour {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            background: #2d3748;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            text-align: center;
+            text-decoration: none;
+            margin-bottom: 15px;
+            box-sizing: border-box;
+        }
+        .btn-retour:hover {
+            background: #4a5568;
+        }
+        .table-container {
+            background: rgba(255,255,255,0.05);
+            padding: 10px;
+            border-radius: 10px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Historique Complet des Trades</h2>
+        <a href="index.html" class="btn-retour">← Retour au Trading</a>
+        
+        <div class="table-container">
+            <table style="width: 100%; color: #fff; text-align: left; font-size: 11px; border-collapse: collapse;">
+                <thead>
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.2);">
+                        <th style="padding: 6px;">Heure</th>
+                        <th style="padding: 6px;">Actif</th>
+                        <th style="padding: 6px;">Type</th>
+                        <th style="padding: 6px;">Montant</th>
+                        <th style="padding: 6px;">Statut</th>
+                    </tr>
+                </thead>
+                <tbody id="historique-complet-body">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        function chargerHistoriqueComplet() {
+            const historique = JSON.parse(localStorage.getItem('ai_baalo_historique')) || [];
+            const tbody = document.getElementById('historique-complet-body');
+            tbody.innerHTML = '';
+
+            if (historique.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align: center; padding: 20px; color: #8899a6;">Aucun historique disponible</td></tr>`;
+                return;
+            }
+
+            historique.forEach(item => {
+                const newRow = document.createElement('tr');
+                const colorStyle = item.typeOption === 'CALL' ? 'color: #4ade80;' : 'color: #f87171;';
+                const heureTrade = item.heure || '--:--:--';
+                newRow.innerHTML = `
+                    <td style="padding: 6px; color: #8899a6;">${heureTrade}</td>
+                    <td style="padding: 6px;">${item.actif} (${item.timefame || '1m'})</td>
+                    <td style="padding: 6px; ${colorStyle} font-weight: bold;">${item.typeOption}</td>
+                    <td style="padding: 6px;">$${item.montant}</td>
+                    <td style="padding: 6px; ${item.resultatCouleur} font-weight: bold;">${item.resultatTexte}</td>
+                `;
+                tbody.appendChild(newRow);
+            });
+        }
+
+        chargerHistoriqueComplet();
+    </script>
+</body>
+</html>
+
