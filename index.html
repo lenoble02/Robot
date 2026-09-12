@@ -110,6 +110,25 @@
         .btn-debut:hover {
             opacity: 0.9;
         }
+        .btn-strategie {
+            width: 100%;
+            padding: 10px;
+            background: #2d3748;
+            color: #a0aec0;
+            border: 1px solid #4a5568;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-bottom: 12px;
+            transition: all 0.3s;
+        }
+        .btn-strategie.active-strat {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            border-color: #34d399;
+            box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+        }
     </style>
 </head>
 <body>
@@ -117,7 +136,6 @@
     <div class="container">
         <h2>AI Booster Robot</h2>
 
-        <!-- Affichage des Soldes -->
         <div style="display: flex; gap: 10px; margin-bottom: 10px;">
             <div class="card-solde" style="flex: 1; margin-bottom: 0;">
                 <div class="solde-info">
@@ -133,7 +151,8 @@
             </div>
         </div>
 
-        <!-- Section Graphique Dynamique -->
+        <button type="button" id="btn-toggle-strategie" class="btn-strategie">Activer la Stratégie Auto (En chaîne)</button>
+
         <div style="background: #1c263d; border-radius: 12px; padding: 10px; margin-bottom: 12px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                 <select id="actif" style="width: 55%; padding: 6px; font-size: 13px;">
@@ -145,7 +164,6 @@
                 <span id="prix-actuel" style="font-size: 13px; color: #4ade80; font-weight: bold;">-- USDT</span>
             </div>
 
-            <!-- Boutons de réglage des unités de temps -->
             <div class="timeframe-container">
                 <button type="button" class="tf-btn" data-tf="5s" data-sec="5">5s</button>
                 <button type="button" class="tf-btn" data-tf="30s" data-sec="30">30s</button>
@@ -154,13 +172,11 @@
                 <button type="button" class="tf-btn" data-tf="1h" data-sec="3600">1h</button>
             </div>
 
-            <!-- Hauteur fixe obligatoire pour l'affichage du canvas -->
             <div style="position: relative; height: 180px; width: 100%;">
                 <canvas id="graphiquePrix"></canvas>
             </div>
         </div>
 
-        <!-- Formulaire de configuration du Trade -->
         <div style="display: flex; gap: 10px;">
             <div class="form-group" style="flex: 1;">
                 <label for="type-compte">Compte</label>
@@ -179,18 +195,18 @@
         </div>
 
         <div class="form-group">
-            <label for="montant">Montant de départ (XOF)</label>
+            <label for="montant">Montant de départ ($5 auto)</label>
             <input type="number" id="montant" value="10">
         </div>
 
         <button type="button" class="btn-debut" id="btn-executer">DÉBUT (<span id="label-expiration">1m</span>)</button>
 
-        <!-- Tableau d'historique -->
         <div class="table-container" style="margin-top: 15px; background: rgba(255,255,255,0.05); padding: 10px; border-radius: 10px;">
             <h3 style="color: #fff; font-size: 14px; margin-bottom: 8px; margin-top: 0;">Historique des Trades</h3>
-            <table style="width: 100%; color: #fff; text-align: left; font-size: 12px; border-collapse: collapse;">
+            <table style="width: 100%; color: #fff; text-align: left; font-size: 11px; border-collapse: collapse;">
                 <thead>
                     <tr style="border-bottom: 1px solid rgba(255,255,255,0.2);">
+                        <th style="padding: 6px;">Heure</th>
                         <th style="padding: 6px;">Actif</th>
                         <th style="padding: 6px;">Type</th>
                         <th style="padding: 6px;">Montant</th>
@@ -208,8 +224,36 @@
         let monGraphique = null;
         let timeframeActuel = '1m';
         let dureeSecondes = 60;
+        let tradeActifEnCours = null;
+        let strategieActive = false;
+        let timeoutStrategie = null;
 
-        // Plugin personnalisé : point lumineux visible et étiquette positionnée juste après avec ligne traversante
+        const btnToggleStrat = document.getElementById('btn-toggle-strategie');
+        const inputMontant = document.getElementById('montant');
+        const selectOption = document.getElementById('type-option');
+        const btnExec = document.getElementById('btn-executer');
+
+        btnToggleStrat.addEventListener('click', () => {
+            strategieActive = !strategieActive;
+            if (strategieActive) {
+                btnToggleStrat.classList.add('active-strat');
+                btnToggleStrat.textContent = "Arrêter la Stratégie Auto (ON)";
+                inputMontant.value = 5;
+                inputMontant.disabled = true;
+                lancerProchainCycle();
+            } else {
+                btnToggleStrat.classList.remove('active-strat');
+                btnToggleStrat.textContent = "Activer la Stratégie Auto (En chaîne)";
+                inputMontant.disabled = false;
+                if (timeoutStrategie) {
+                    clearTimeout(timeoutStrategie);
+                    timeoutStrategie = null;
+                }
+                btnExec.disabled = false;
+                btnExec.innerHTML = `DÉBUT (<span id="label-expiration">${timeframeActuel}</span>)`;
+            }
+        });
+
         const pointBrillantEtLignePlugin = {
             id: 'pointBrillantEtLigne',
             afterDraw(chart) {
@@ -225,9 +269,26 @@
                 const xPixel = point.x;
                 const yPixel = point.y;
                 const xAxis = chart.scales.x;
+                const yAxis = chart.scales.y;
                 const dernierPrix = dataset.data[dernierPointIndex];
 
                 ctx.save();
+
+                if (tradeActifEnCours) {
+                    const yPointTrade = yAxis.getPixelForValue(tradeActifEnCours.prixDepart);
+                    if (!isNaN(yPointTrade)) {
+                        ctx.shadowBlur = 10;
+                        ctx.shadowColor = tradeActifEnCours.couleur;
+                        ctx.fillStyle = tradeActifEnCours.couleur;
+                        ctx.beginPath();
+                        ctx.arc(xPixel, yPointTrade, 6, 0, 2 * Math.PI);
+                        ctx.fill();
+                        ctx.shadowBlur = 0;
+                        ctx.strokeStyle = '#ffffff';
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+                    }
+                }
 
                 const textePrix = dernierPrix.toFixed(2);
                 ctx.font = '10px sans-serif';
@@ -235,7 +296,6 @@
                 const largeurEtiquette = largeurTexte + 16;
                 const xEtiquette = xPixel + 12;
 
-                // Ligne pointillée horizontale traversante
                 ctx.beginPath();
                 ctx.setLineDash([4, 4]);
                 ctx.moveTo(xAxis.left, yPixel);
@@ -244,7 +304,6 @@
                 ctx.lineWidth = 1.2;
                 ctx.stroke();
 
-                // Point lumineux au bout
                 ctx.shadowBlur = 12;
                 ctx.shadowColor = '#00c6ff';
                 ctx.fillStyle = '#00c6ff';
@@ -258,11 +317,10 @@
                 ctx.arc(xPixel, yPixel, 2, 0, 2 * Math.PI);
                 ctx.fill();
 
-                // Étiquette du prix
                 const yEtiquette = yPixel - 9;
                 ctx.fillStyle = '#0072ff';
                 ctx.fillRect(xEtiquette, yEtiquette, largeurEtiquette, 18);
-                
+
                 ctx.fillStyle = '#ffffff';
                 ctx.fillText(textePrix, xEtiquette + 8, yPixel + 3);
 
@@ -291,12 +349,10 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     plugins: { legend: { display: false } },
-                    layout: {
-                        padding: { right: 85 }
-                    },
+                    layout: { padding: { right: 85 } },
                     scales: {
                         x: { display: false },
-                        y: { 
+                        y: {
                             grid: { color: 'rgba(255, 255, 255, 0.05)' },
                             ticks: { color: '#8899a6', font: { size: 10 } }
                         }
@@ -311,6 +367,9 @@
                 .then(res => res.json())
                 .then(data => {
                     document.getElementById('solde-demo').textContent = `${data.solde_demo.toLocaleString()} ${data.devise}`;
+                    if (data.solde_reel !== undefined) {
+                        document.getElementById('solde-reel').textContent = `${data.solde_reel.toLocaleString()} ${data.devise}`;
+                    }
                 })
                 .catch(err => console.error("Erreur soldes :", err));
         }
@@ -335,20 +394,20 @@
                 .catch(err => console.error("Erreur bougies :", err));
         }
 
-        // Charger l'historique depuis localStorage au démarrage (limité aux 10 derniers affichés)
         function chargerHistoriqueLocalStorage() {
-            const historique = JSON.parse(localStorage.getItem('ai_booster_historique')) || [];
+            const historique = JSON.parse(localStorage.getItem('ai_baalo_historique')) || [];
             const tbody = document.getElementById('historique-table-body');
             tbody.innerHTML = '';
-            
-            // On prend les 10 plus récents pour l'affichage
+
             historique.slice(0, 10).forEach(item => {
                 const newRow = document.createElement('tr');
                 const colorStyle = item.typeOption === 'CALL' ? 'color: #4ade80;' : 'color: #f87171;';
+                const heureTrade = item.heure || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
                 newRow.innerHTML = `
+                    <td style="padding: 6px; color: #8899a6;">${heureTrade}</td>
                     <td style="padding: 6px;">${item.actif} (${item.timeframe})</td>
-                    <td style="padding: 6px; ${colorStyle}">${item.typeOption}</td>
-                    <td style="padding: 6px;">${item.montant} XOF</td>
+                    <td style="padding: 6px; ${colorStyle} font-weight: bold;">${item.typeOption}</td>
+                    <td style="padding: 6px;">${item.montant}</td>
                     <td style="padding: 6px; ${item.resultatCouleur} font-weight: bold;">${item.resultatTexte}</td>
                 `;
                 tbody.appendChild(newRow);
@@ -356,12 +415,9 @@
         }
 
         function sauvegarderEtAfficherTrade(tradeData) {
-            let historique = JSON.parse(localStorage.getItem('ai_booster_historique')) || [];
-            // Ajout au début du tableau global (stockage persistant complet)
+            let historique = JSON.parse(localStorage.getItem('ai_baalo_historique')) || [];
             historique.unshift(tradeData);
-            localStorage.setItem('ai_booster_historique', JSON.stringify(historique));
-
-            // Recharge l'affichage pour respecter la limite des 10 affichés à l'écran
+            localStorage.setItem('ai_baalo_historique', JSON.stringify(historique));
             chargerHistoriqueLocalStorage();
         }
 
@@ -370,115 +426,148 @@
         chargerHistoriqueLocalStorage();
         const actifInitial = document.getElementById('actif').value;
         chargerBougies(actifInitial, timeframeActuel);
-
-        document.querySelectorAll('.tf-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
-                this.classList.add('active');
-                timeframeActuel = this.getAttribute('data-tf');
-                dureeSecondes = parseInt(this.getAttribute('data-sec'));
-                document.getElementById('label-expiration').textContent = timeframeActuel;
-                
-                const actifActuel = document.getElementById('actif').value;
-                chargerBougies(actifActuel, timeframeActuel);
-            });
-        });
-
         setInterval(() => {
             const actifActuel = document.getElementById('actif').value;
             chargerBougies(actifActuel, timeframeActuel);
             actualiserSoldes();
         }, 5000);
 
-        document.getElementById('actif').addEventListener('change', function() {
-            chargerBougies(this.value, timeframeActuel);
-        });
+        function executerUnCycleDeTrade() {
+            if (!strategieActive) return;
 
-        // Logique de trade avec compte à rebours, comparaison stricte (> / <) et persistance localStorage (10 affichés)
-        document.getElementById('btn-executer').addEventListener('click', () => {
             const actif = document.getElementById('actif').value;
-            const montant = document.getElementById('montant').value;
-            const typeOption = document.getElementById('type-option').value;
+            const montantManuel = document.getElementById('montant').value;
+            const typeOptionManuel = document.getElementById('type-option').value;
             const typeCompte = document.getElementById('type-compte').value;
 
             const dataset = monGraphique.data.datasets[0].data;
-            if (!dataset || dataset.length === 0) {
-                alert("Patientez, le graphique est en cours de chargement...");
-                return;
-            }
+            if (!dataset || dataset.length === 0) return;
 
             const prixDepart = dataset[dataset.length - 1];
-            const btnExec = document.getElementById('btn-executer');
             btnExec.disabled = true;
 
-            let tempsRestant = dureeSecondes;
+            fetch('/api/trading/executer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    actif,
+                    montant: montantManuel,
+                    type_option: typeOptionManuel,
+                    type_compte: typeCompte,
+                    timeframe: timeframeActuel,
+                    strategie_active: true,
+                    phase: 'DEBUT'
+                })
+            })
+            .then(res => res.json())
+            .then(dataInit => {
+                const directionJouee = dataInit.type_option_utilise;
+                const montantJoue = dataInit.montant_utilise;
 
-            const intervalCompteARebours = setInterval(() => {
-                btnExec.innerHTML = `Trade en cours... (${tempsRestant}s)`;
-                tempsRestant--;
+                inputMontant.value = montantJoue;
+                selectOption.value = directionJouee;
 
-                if (tempsRestant < 0) {
-                    clearInterval(intervalCompteARebours);
+                const couleurPoint = directionJouee === 'CALL' ? '#4ade80' : '#f87171';
+                tradeActifEnCours = { prixDepart, couleur: couleurPoint };
 
-                    const datasetActuel = monGraphique.data.datasets[0].data;
-                    const prixArrivee = datasetActuel && datasetActuel.length > 0 ? datasetActuel[datasetActuel.length - 1] : prixDepart;
-
-                    let resultatTexte = "Perdu";
-                    let resultatCouleur = "color: #f87171;";
-
-                    // Comparaison stricte demandée
-                    if (typeOption === 'CALL') {
-                        if (prixArrivee > prixDepart) {
-                            resultatTexte = "Gain";
-                            resultatCouleur = "color: #4ade80;";
-                        }
-                    } else if (typeOption === 'PUT') {
-                        if (prixArrivee < prixDepart) {
-                            resultatTexte = "Gain";
-                            resultatCouleur = "color: #4ade80;";
-                        }
+                let tempsRestant = dureeSecondes;
+                const intervalCompteARebours = setInterval(() => {
+                    if (!strategieActive) {
+                        clearInterval(intervalCompteARebours);
+                        return;
                     }
+                    btnExec.innerHTML = `Auto (${directionJouee} - $${montantJoue}) : ${tempsRestant}s`;
+                    tempsRestant--;
 
-                    fetch('/api/trading/executer', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ 
-                            actif, 
-                            montant, 
-                            type_option: typeOption, 
-                            type_compte: typeCompte,
-                            duree: dureeSecondes,
-                            resultat: resultatTexte
-                        })
-                    })
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.nouveau_solde_demo !== undefined) {
-                            document.getElementById('solde-demo').textContent = `${data.nouveau_solde_demo.toLocaleString()} USDT`;
-                        } else {
-                            actualiserSoldes();
+                    if (tempsRestant < 0) {
+                        clearInterval(intervalCompteARebours);
+                        tradeActifEnCours = null;
+
+                        const datasetActuel = monGraphique.data.datasets[0].data;
+                        const prixArrivee = datasetActuel && datasetActuel.length > 0 ? datasetActuel[datasetActuel.length - 1] : prixDepart;
+
+                        let resultatTexte = "Perdu";
+                        let resultatCouleur = "color: #f87171;";
+
+                        if (directionJouee === 'CALL' && prixArrivee > prixDepart) {
+                            resultatTexte = "Gain";
+                            resultatCouleur = "color: #4ade80;";
+                        } else if (directionJouee === 'PUT' && prixArrivee < prixDepart) {
+                            resultatTexte = "Gain";
+                            resultatCouleur = "color: #4ade80;";
                         }
-                    })
-                    .catch(err => {
-                        console.error("Erreur API:", err);
-                        actualiserSoldes();
-                    });
 
-                    // Enregistrement et affichage persistant (max 10 affichés, tout est conservé en arrière-plan)
-                    sauvegarderEtAfficherTrade({
-                        actif,
-                        timeframe: timeframeActuel,
-                        typeOption,
-                        montant,
-                        resultatTexte,
-                        resultatCouleur
-                    });
+                        const heureActuelle = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-                    btnExec.disabled = false;
-                    btnExec.innerHTML = `DÉBUT (<span id="label-expiration">${timeframeActuel}</span>)`;
+                        // Affichage d'une pause d'analyse de 2.5 secondes
+                        btnExec.innerHTML = `Analyse du gain...`;
+
+                        fetch('/api/trading/executer', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                actif,
+                                montant: montantJoue,
+                                type_option: directionJouee,
+                                type_compte: typeCompte,
+                                timeframe: timeframeActuel,
+                                strategie_active: true,
+                                phase: 'FIN',
+                                resultat: resultatTexte
+                            })
+                        })
+                        .then(res => res.json())
+                        .then(dataFin => {
+                            if (dataFin.nouveau_solde_demo !== undefined) {
+                                document.getElementById('solde-demo').textContent = `${dataFin.nouveau_solde_demo.toLocaleString()} USDT`;
+                            } else {
+                                actualiserSoldes();
+                            }
+
+                            if (dataFin.prochaine_mise !== undefined) {
+                                inputMontant.value = dataFin.prochaine_mise;
+                                selectOption.value = dataFin.prochaine_direction;
+                            }
+
+                            sauvegarderEtAfficherTrade({
+                                heure: heureActuelle,
+                                actif,
+                                timefame: timeframeActuel,
+                                typeOption: directionJouee,
+                                montant: montantJoue,
+                                resultatTexte,
+                                resultatCouleur
+                            });
+
+                            // LAISSER 2.5 SECONDES DE PAUSE AVANT DE RELANCER LE PROCHAIN CYCLE
+                            if (strategieActive) {
+                                timeoutStrategie = setTimeout(() => {
+                                    lancerProchainCycle();
+                                }, 2500);
+                            }
+                        })
+                        .catch(err => {
+                            console.error("Erreur fin de cycle:", err);
+                            if (strategieActive) {
+                                timeoutStrategie = setTimeout(lancerProchainCycle, 2500);
+                            }
+                        });
+                    }
+                }, 1000);
+            })
+            .catch(err => {
+                console.error("Erreur début cycle:", err);
+                if (strategieActive) {
+                    timeoutStrategie = setTimeout(lancerProchainCycle, 2500);
                 }
-            }, 1000);
-        });
+            });
+        }
+
+        function lancerProchainCycle() {
+            if (strategieActive) {
+                executerUnCycleDeTrade();
+            }
+        }
     </script>
 </body>
 </html>
